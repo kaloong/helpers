@@ -34,6 +34,7 @@ old patterns and options:
 """
 import re, argparse
 import datetime
+import click
 from pathlib import Path
 
 def create_testdir():
@@ -41,13 +42,21 @@ def create_testdir():
 
 def create_testfile():
 	for f in range(10):
-		Path("testdir/testfile-08-12-2020-{}.py".format(f)).touch()
+		Path("testdir/testfile-05-12-2020-{}.time".format(f)).touch()
+	for f in range(10):
+		Path("testdir/testfile-4-12-2020-{}.time".format(f)).touch()
+	"""
+	for f in range(10):
+		Path("testdir/testfile2-2020-01-30-{}.log".format(f)).touch()
+		"""
 
-def rename( target, file_pattern, old_pattern, new_pattern):
+def create_new_name( target, file_pattern, old_pattern, new_pattern):
 
 	'''date_regex=re.compile(r'\d\d-\d\d-\d\d\d\d-\d\dh-\d\dm-\d\ds')'''
 	date_regex=re.compile(file_pattern)
+	
 	target_date=date_regex.search( target )
+	print("--> {}".format(target_date))
 	if target_date:
 		file_date=datetime.datetime.strptime(target_date.group(), old_pattern)
 		old_fmt=file_date.strftime(old_pattern)
@@ -56,21 +65,44 @@ def rename( target, file_pattern, old_pattern, new_pattern):
 		return new_name
 	return "{}".format(target)
 
+def extract_date( target ):
+	"""
+	Extract date from file
+	"""
+	regex_list=[ "\d{1,2}-\d{1,2}-\d{4}", "\d{4}-\d{1,2}-\d{1,2}" ]
+	format_list=["%d-%m-%Y","%Y-%m-%d"]	
+	date_regex=re.compile('|'.join(regex_list))
+	
+	'''dir_date=datetime.datetime.strptime(target_date.group(), "%d-%m-%Y|%Y-%m-%d" )'''
+	dir_date=None
+	for i in format_list:
+		target_date = date_regex.search(target)
+		print(target_date)
+		if target_date is not None:
+			try: 
+				dir_date=datetime.datetime.strptime(target_date.group(),"{}".format(i))
+			except:
+				pass
+	return str( dir_date.strftime("%Y%m%d") )
+
+
 def main():
 
-	file_pattern="\d\d-\d\d-\d\d\d\d"
+	file_pattern="\d{1,2}-\d{1,2}-\d{4}"
 	old_pattern="%d-%m-%Y"
 	new_pattern="%Y-%m-%d"
 
 
 	parser = argparse.ArgumentParser()
-	group = parser.add_mutually_exclusive_group(required=True)
+	group1 = parser.add_mutually_exclusive_group(required=True)
+	group2 = parser.add_argument_group()
 	"""
 
 	"""
 
-	group.add_argument("-g","--generate",help="Generate test dir files", action='store_true')
-	group.add_argument("-t","--target", help="Specify target folder -t testdir")
+	group1.add_argument("-g","--generate",help="Generate test directory and files", action='store_true')
+	group1.add_argument("-t","--target", help="Specify target folder -t testdir")
+	group2.add_argument("-d","--directory", help="Move files to new directory based on date", action='store_true', default=False)
 	args = parser.parse_args()
 	if args.generate:
 		create_testdir()
@@ -79,13 +111,26 @@ def main():
 		try:
 			p=Path(args.target)
 			for f in p.iterdir(): 
-				new_name = rename( f.name, file_pattern, old_pattern, new_pattern )
-				a = Path(args.target+"/"+new_name)
-				if not a.exists():
-					f.rename(a)
-					print(f)
-				else:
-					print("File {} already exists. Skip".format(a))
+				if not f.is_dir():
+					new_name = create_new_name( f.name, file_pattern, old_pattern, new_pattern )
+					print("New name: {}".format(new_name))
+					new_dir=None
+					if args.directory :
+						new_dir = extract_date( f.name )
+						a = Path(args.target+"/"+ new_dir).mkdir(parents=True,exist_ok=True)
+
+					if new_dir is not None:
+						a = Path(args.target+"/"+new_dir+"/"+new_name)
+					else:
+						a = Path(args.target+"/"+new_name)
+
+					if not a.exists():
+						f.rename(a)
+						print(f)
+					else:
+						if click.confirm("Looks like file {} already exists:{}, would you like to overwrite?".format(a, a.exists), default=True):
+							'''check if we should replace it'''
+							f.replace(a)
 		except FileNotFoundError as e:
 			print("{}".format(e))
 
