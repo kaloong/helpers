@@ -33,7 +33,7 @@ old patterns and options:
 
 """
 import re, argparse
-import datetime, sys
+import datetime
 import click
 from pathlib import Path
 
@@ -42,13 +42,27 @@ def create_testdir():
 
 def create_testfile():
 	for f in range(10):
-		Path("testdir/testfile-3-2-2020-{}.time".format(f)).touch()
+		Path("testdir/testfile-05-12-2020-{}.time".format(f)).touch()
 	for f in range(10):
-		Path("testdir/testfile-2-2-2020-{}.log".format(f)).touch()
+		Path("testdir/testfile-04-12-2020-{}.time".format(f)).touch()
 	"""
 	for f in range(10):
 		Path("testdir/testfile2-2020-01-30-{}.log".format(f)).touch()
-	"""
+		"""
+
+def create_new_name( target, file_pattern, old_pattern, new_pattern):
+
+	date_regex=re.compile(file_pattern)
+
+	target_date=date_regex.search( target )
+	print("--> {}".format(target_date))
+	if target_date:
+		file_date=datetime.datetime.strptime(target_date.group(), old_pattern)
+		old_fmt=file_date.strftime(old_pattern)
+		new_fmt=file_date.strftime(new_pattern)
+		new_name = re.sub( old_fmt, new_fmt, target )
+		return new_name
+	return "{}".format(target)
 
 def extract_date( target ):
 	"""
@@ -58,49 +72,23 @@ def extract_date( target ):
 	fmt_list=['%d-%m-%Y','%Y-%m-%d']	
 	date_regex=re.compile('|'.join(regex_list))
 
-	result_date=None
-	target_date = date_regex.search(target)
+	dir_date=None
 	for fmt in fmt_list:
-		
+		target_date = date_regex.search(target)
+		print(target_date)
 		if target_date is not None:
 			try: 
-				result_date=datetime.datetime.strptime(target_date.group(),"{}".format(fmt))
+				dir_date=datetime.datetime.strptime(target_date.group(),"{}".format(fmt))
 			except:
 				pass
-	try:
-		'''
-		If search is ok, return new datetime object and current date string(to be used for regex substitution)
-		'''
-		return result_date, target_date.group()
-	except AttributeError as e:
-		print(">>> Error: {}\n>>> Target file does not match in regex_list. Script terminated.".format(e))
-		sys.exit()
-
-
-def create_new_filename( target ):
-
-	result_date, cur_date_fmt =extract_date( target )
-	if result_date:
-		new_date_fmt=result_date.strftime('%Y-%m-%d')
-		'''
-		New name will have its date substituted 
-		from: testfile-4-12-2020-1.log 
-		to:   testfile-2020-12-04-1.log
-		'''
-		new_name = re.sub( cur_date_fmt, new_date_fmt, target )
-		return new_name
-	'''
-	This is not needed I think.
-	'''
-	return "{}".format(target)
-	
-
-def create_new_dirname(target):
-	new_dirname, _ = extract_date(target)
-	return new_dirname.strftime('%Y%m%d')
+	return str( dir_date.strftime("%Y%m%d") )
 
 
 def main():
+
+	file_pattern='\d{1,2}-\d{1,2}-\d{4}'
+	old_pattern='%d-%m-%Y'
+	new_pattern='%Y-%m-%d'
 
 	parser = argparse.ArgumentParser()
 	group1 = parser.add_mutually_exclusive_group(required=True)
@@ -124,26 +112,26 @@ def main():
 			"""
 			for f in p.iterdir(): 
 				if not f.is_dir():
-					new_filename = create_new_filename( f.name )
-					'''print("New name: {}".format(new_filename))'''
-					new_dirname=None
+					new_name = create_new_name( f.name, file_pattern, old_pattern, new_pattern )
+					print("New name: {}".format(new_name))
+					new_dir=None
 					if args.directory :
-						new_dirname = create_new_dirname( f.name )
+						new_dir = extract_date( f.name )
 						"""
 						What does 'a' stand for? Give meaningful name.
 						"""
-						a = Path(args.target+"/"+ new_dirname).mkdir(parents=True,exist_ok=True)
+						a = Path(args.target+"/"+ new_dir).mkdir(parents=True,exist_ok=True)
 
-					if new_dirname is not None:
-						a = Path(args.target+"/"+new_dirname+"/"+new_filename)
+					if new_dir is not None:
+						a = Path(args.target+"/"+new_dir+"/"+new_name)
 					else:
-						a = Path(args.target+"/"+new_filename)
+						a = Path(args.target+"/"+new_name)
 
 					if not a.exists():
 						f.rename(a)
 						print(f)
 					else:
-						if click.confirm("Looks like file {} already exists: {},\nwould you like to overwrite?".format(a, a.exists()), default=True):
+						if click.confirm("Looks like file {} already exists:{}, would you like to overwrite?".format(a, a.exists()), default=True):
 							'''check if we should replace it'''
 							f.replace(a)
 		except FileNotFoundError as e:
