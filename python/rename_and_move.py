@@ -16,31 +16,19 @@ get filename
 extract info(such as date) from filename
 check if date folder exists in target logfolder, if not exists create folder.
 check if filename is in use under process, if not move file to folder. 
-go loop, for next file
-
-
-old patterns and options:
-	file_pattern="\d\d-\d\d-\d\d\d\d-\d\dh-\d\dm-\d\ds"
-	old_pattern="%d-%m-%Y-%Hh-%Mm-%Ss"
-	new_pattern="%Y-%m-%d-%Hh-%Mm-%Ss"
-
-	parser.add_argument("-p","--pattern",help="Filename date regex. E.g. DD-MM-YYYY shouldbe \d\d-\d\d-\d\d\d\d",default="\d\d-\d\d-\d\d\d\d")
-	required_parser = parser.add_argument_group("Required options for -p.")
-	required_parser.add_argument("-b","--before",help="Date format before \%d-\%m-\%Y. E.g. 31-12-2020",default="%d-%m-%Y")
-	required_parser.add_argument("-a","--after", help="Date format after  \%Y-\%m-\%d. E.g. 2020-12-31", default="%Y-%m-%d")
-	args = parser.parse_args()
-	print("---{}".format( args.before ) )
+go loop, for next fil
 
 """
-import re, argparse
-import datetime, sys
-import click
-from pathlib import Path
 
-def create_testdir():
+def ctrlc_handler(signal_received, frame):
+	print("\nSIGINT ctrl-c detected. Exit Gracefully.")
+	sys.exit(0)
+
+def create_testdata_helper():
+	"""
+	Generate test data if option is specified.
+	"""
 	Path("testdir").mkdir(parents=True, exist_ok=True)
-
-def create_testfile():
 	for f in range(10):
 		Path("testdir/testfile-3-2-2020-{}.time".format(f)).touch()
 	for f in range(10):
@@ -49,6 +37,7 @@ def create_testfile():
 	for f in range(10):
 		Path("testdir/testfile2-2020-01-30-{}.log".format(f)).touch()
 	"""
+	return
 
 def extract_date( target ):
 	"""
@@ -105,18 +94,18 @@ def main():
 	parser = argparse.ArgumentParser()
 	group1 = parser.add_mutually_exclusive_group(required=True)
 	group2 = parser.add_argument_group()
-
-	group1.add_argument("-g","--generate",help="Generate test directory and files", action='store_true')
-	group1.add_argument("-t","--target", help="Specify target folder -t testdir")
-	group2.add_argument("-d","--directory", help="Move files to new directory based on date", action='store_true', default=False)
+	group3 = parser.add_argument_group()
+	group1.add_argument("-g", "--generate",help="Generate test directory and files", action='store_true')
+	group1.add_argument("-t", "--target", help="Specify target folder -t testdir")
+	group2.add_argument("-s", "--simulate", help="Simulate without making changes", action='store_true')
+	group3.add_argument("-d", "--directory", help="Move files to new directory based on date", action='store_true', default=False)
 	args = parser.parse_args()
+
 	if args.generate:
-		"""
-		Generate test data if option is specified.
-		"""
-		create_testdir()
-		create_testfile()
+		create_testdata_helper()
+
 	if args.target:
+		args.target=args.target.strip('/')
 		try:
 			p=Path(args.target)
 			"""
@@ -124,6 +113,7 @@ def main():
 			"""
 			for f in p.iterdir(): 
 				if not f.is_dir():
+					print("-----------------------------------------------------------------------------------------------------")
 					new_filename = create_new_filename( f.name )
 					'''print("New name: {}".format(new_filename))'''
 					new_dirname=None
@@ -132,24 +122,56 @@ def main():
 						"""
 						What does 'a' stand for? Give meaningful name.
 						"""
-						a = Path(args.target+"/"+ new_dirname).mkdir(parents=True,exist_ok=True)
+						if args.simulate:
+							print("[sim] Create directory: {}/{}".format(args.target, new_dirname))
+						else:
+							a = Path(args.target+"/"+ new_dirname).mkdir(parents=True,exist_ok=True)
 
 					if new_dirname is not None:
+						if args.simulate:
+							print("[sim] New file directory: {}/{}/".format(new_filename, args.target, new_dirname ))
 						a = Path(args.target+"/"+new_dirname+"/"+new_filename)
 					else:
+						if args.simulate:
+							print("[sim] Create directory: {}/{}".format(args.target, new_filename))
 						a = Path(args.target+"/"+new_filename)
 
 					if not a.exists():
-						f.rename(a)
-						print(f)
+						if args.simulate:
+							print("[sim] Move and rename file: from {} to {} ".format(f.name,new_filename))
+						else:
+							f.rename(a)
+							print("[***] File: {} renamed to: {}".format(f, a))
 					else:
-						if click.confirm("Looks like file {} already exists: {},\nwould you like to overwrite?".format(a, a.exists()), default=True):
-							'''check if we should replace it'''
-							f.replace(a)
+						if args.simulate:
+							if a.exists():
+								print("[sim] Looks like file {} already exists: {},\n[sim] would you like to overwrite? Yes.".format(a, a.exists()))
+						else:
+							if click.confirm("Looks like file {} already exists: {},\n[***] would you like to overwrite?".format(a, a.exists()), default=True):
+								'''check if we should replace it'''
+								f.replace(a)
 		except FileNotFoundError as e:
 			print("{}".format(e))
-
+		"""
+		Add another exception for control-c
+		"""
 
 if __name__ == '__main__':
+	import sys
+	try:
+		if sys.version_info <= (3, 0) :
+			sys.stdout.write("Sorry, this script require python3.x not 2\n") 
+			sys.exit(1)
+
+		import re, argparse
+		import datetime
+		import click
+		from pathlib import Path
+		from signal import signal, SIGINT
+	
+	except ImportError as e:
+		print("Exit script with error. {}".format(e))
+		sys.exit(1)
+	signal(SIGINT, ctrlc_handler )
 	main()
 
